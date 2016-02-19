@@ -1,0 +1,100 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy multiple compute instance
+
+parameters:
+  flavor:
+    type: string
+    description: Sabor de la instancia
+    default: m1.tiny
+    constraints:
+      - allowed_values: [m1.tiny,m1.small]
+        description: InstanceType must be one of (m1.tiny m1.small)
+  key_name:
+    type: string
+    default: clavecloud
+    description: Clave SSH
+  user_name:
+    type: string
+    label: jesus
+    description: User name to be configured for the application
+    constraints:
+      - allowed_pattern: "[A-Z]+[a-zA-Z0-9]*"
+        description: El usuario debe empezar con mayuscula
+
+resources:
+  Instancia1:
+    type: OS::Nova::Server
+    properties:
+      name: Debian
+      key_name: {get_param: key_name}
+      image: Debian Jessie 8.2
+      flavor: {get_param: flavor}
+      admin_user: {get_param: user_name}
+      networks: [{"network":"red de jesus.bueno"}]
+
+  Instancia2:
+    type: OS::Nova::Server
+    depends_on: Instancia1
+    properties:
+      name: Trusty
+      key_name: {get_param: key_name}
+      image: Ubuntu 14.04 LTS
+      flavor: {get_param: flavor}
+      admin_user: {get_param: user_name}
+      networks: [{"network":"red de jesus.bueno"}]
+
+  new_volume:
+     type: OS::Cinder::Volume
+     properties:
+       size: 1
+
+  volume_attachment:
+     type: OS::Cinder::VolumeAttachment
+     properties:
+       volume_id: { get_resource: new_volume }
+       instance_uuid: { get_resource: Instancia2 }
+
+  Instancia3:
+    type: OS::Nova::Server
+    depends_on: Instancia2
+    properties:
+      name: CentOS
+      key_name: {get_param: key_name}
+      image: CentOS 7.1
+      flavor: {get_param: flavor}
+      admin_user: {get_param: user_name}
+      networks: [{"network":"red de jesus.bueno"}]
+
+  floating_ip:
+     type: OS::Nova::FloatingIP
+     properties:
+       pool: ext-net
+
+  floating_ip2:
+     type: OS::Nova::FloatingIP
+     properties:
+       pool: ext-net
+
+  floating_ip3:
+     type: OS::Nova::FloatingIP
+     properties:
+       pool: ext-net
+
+  association:
+     type: OS::Nova::FloatingIPAssociation
+     properties:
+       floating_ip: { get_resource: floating_ip }
+       server_id: { get_resource: Instancia1 }
+
+  association2:
+     type: OS::Nova::FloatingIPAssociation
+     properties:
+       floating_ip: { get_resource: floating_ip2 }
+       server_id: { get_resource: Instancia2 }
+
+  association3:
+     type: OS::Nova::FloatingIPAssociation
+     properties:
+       floating_ip: { get_resource: floating_ip3 }
+       server_id: { get_resource: Instancia3 }
