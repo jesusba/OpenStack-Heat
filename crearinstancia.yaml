@@ -1,0 +1,41 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy multiple compute instance
+
+parameters:
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    constraints:
+      - allowed_values: 
+        - Debian Jessie 8.2
+        - Ubuntu 14.04 LTS
+        - CentOS 7.1
+  flavor:
+    type: string
+    description: Sabor de la instancia
+    default: m1.tiny
+    constraints:
+      - allowed_values: [m1.tiny,m1.small]
+        description: InstanceType must be one of (m1.tiny m1.small)
+  key_name:
+    type: string
+    default: clavecloud
+    description: Clave SSH
+  user_name:
+    type: string
+    label: jesus
+    description: User name to be configured for the application
+    constraints:
+      - allowed_pattern: "[0-9]+[a-zA-Z0-9]*"
+        description: El usuario debe empezar por numero
+resources:
+  Instancia1:
+    type: OS::Nova::Server
+    properties:
+      name: CentOS 7
+      key_name: {get_param: key_name}
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      admin_user: {get_param: user_name}
+      networks: [{"network":"red de jesus.bueno"}]
