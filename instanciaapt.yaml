@@ -1,0 +1,57 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy multiple compute instance
+
+parameters:
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    constraints:
+      - allowed_values: 
+        - Debian Jessie 8.2
+        - Ubuntu 14.04 LTS
+        - CentOS 7.1
+  flavor:
+    type: string
+    description: Sabor de la instancia
+    default: m1.tiny
+    constraints:
+      - allowed_values: [m1.tiny,m1.small]
+        description: InstanceType must be one of (m1.tiny m1.small)
+  key_name:
+    type: string
+    default: clavecloud
+    description: Clave SSH
+  paquete:
+      type: string    
+      default: ansible
+
+resources:
+  Instancia1:
+    type: OS::Nova::Server
+    properties:
+      name: Debianapt
+      key_name: {get_param: key_name}
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      networks: [{"network":"red de jesus.bueno"}]
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash -v
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y aptitude package
+          params:
+            package: { get_param: paquete}
+
+  floating_ip:
+     type: OS::Nova::FloatingIP
+     properties:
+       pool: ext-net
+
+  association:
+     type: OS::Nova::FloatingIPAssociation
+     properties:
+       floating_ip: { get_resource: floating_ip }
+       server_id: { get_resource: Instancia1 }
