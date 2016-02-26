@@ -98,7 +98,7 @@ resources:
           template: |
             #!/bin/bash -v
             yum install -y httpd wget unzip
-            yum install -y php php-mbstring php-gd php-xml php-pear 
+            yum install -y php php-mbstring php-gd php-xml php-pear php-mysql php-pdo
             
             wget http://ftp.drupal.org/files/projects/drupal-7.33.zip
             unzip -q drupal-7.33.zip -d /var/www/html/
@@ -110,17 +110,20 @@ resources:
             chcon -R -t httpd_sys_content_rw_t /var/www/html/drupal/sites/
             
             sed -i 's/databasename/db_name/g' /var/www/html/drupal/sites/default/default.settings.php
-            sed -i 's/username/db_user/g' /var/www/html/drupal/sites/default/default.settings.php
-            sed -i 's/password/db_password/g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's%=> '\''username'\''%=> '\''db_username'\''%g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's%=> '\''password'\''%=> '\''db_password'\''%g' /var/www/html/drupal/sites/default/default.settings.php
             sed -i 's/localhost/db_host/g' /var/www/html/drupal/sites/default/default.settings.php 
             sed -i 's/myprefix_/drupal_/g' /var/www/html/drupal/sites/default/default.settings.php 
           
             cp /var/www/html/drupal/sites/default/default.settings.php /var/www/html/drupal/sites/default/settings.php
             
+            chmod a+w /var/www/html/drupal/sites/default/settings.php
+            
             setenforce 0
+            
             systemctl start httpd.service
             systemctl enable httpd.service
-          
+
           params:
             db_name: { get_param: db_name }
             db_user: { get_param: db_username }
