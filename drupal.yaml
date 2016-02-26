@@ -53,37 +53,86 @@ resources:
   Instancia1:
     type: OS::Nova::Server
     properties:
-      name: Debianapt
+      name: Drupal_db
       key_name: {get_param: key_name}
       image: {get_param: image}
       flavor: {get_param: flavor}
       networks: [{"network":"red de jesus.bueno"}]
+      admin_user: {get_param: user_name}
       user_data:
         str_replace:
           template: |
             #!/bin/bash -v
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update
-            apt-get install -y mysql-server-5.5 apache2 drupal7
+            yum install -y mariadb mariadb-server
+            
+            systemctl start mariadb.service
+            systemctl enable mariadb.service
+            
             mysqladmin -u root password db_rootpassword
-            cat << EOF | mysql -u root --p=db_rootpassword
+            
+            cat << EOF | mysql -u root --password=db_rootpassword
             CREATE DATABASE db_name;
-            GRANT ALL PRIVILEGES ON db_name.* TO "db_user"@"localhost" IDENTIFIED BY "db_password";
+            GRANT ALL PRIVILEGES ON db_name.* TO "db_user"@"%"
+            IDENTIFIED BY "db_password";
+            FLUSH PRIVILEGES;
             EXIT
             EOF
-            ln -s /etc/drupal/7/apache2.conf /etc/apache2/conf.d/drupal7.conf
-            a2enconf drupal7
-            a2enmod rewrite
-            sed -i 's/# RewriteBase/RewriteBase/g' /etc/drupal/7/htaccess
-            sed -i 's/# RewriteBase/RewriteBase/g' /etc/drupal/7/htaccess
-            service apache2 reload
+          
           params:
             db_rootpassword: { get_param: db_root_password }
             db_name: { get_param: db_name }
             db_user: { get_param: db_username }
             db_password: { get_param: db_password }
 
+  Instancia2:
+    type: OS::Nova::Server
+    properties:
+      name: Drupal_wb
+      key_name: {get_param: key_name}
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      networks: [{"network":"red de jesus.bueno"}]
+      admin_user: {get_param: user_name}
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash -v
+            yum install -y httpd wget unzip
+            yum install -y php php-mbstring php-gd php-xml php-pear 
+            
+            wget http://ftp.drupal.org/files/projects/drupal-7.33.zip
+            unzip -q drupal-7.33.zip -d /var/www/html/
+            
+            mv /var/www/html/drupal-7.33/ /var/www/html/drupal
+            chown -R apache:apache /var/www/html/drupal
+            cd /var/www/html/drupal/sites/default/
+            
+            chcon -R -t httpd_sys_content_rw_t /var/www/html/drupal/sites/
+            
+            sed -i 's/databasename/db_name/g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's/username/db_user/g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's/password/db_password/g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's/localhost/db_host/g' /var/www/html/drupal/sites/default/default.settings.php 
+            sed -i 's/myprefix_/drupal_/g' /var/www/html/drupal/sites/default/default.settings.php 
+          
+            cp -p /var/www/html/drupal/sites/default/default.settings.php /var/www/html/drupal/sites/default/settings.php
+            
+            setenforce 0
+            systemctl start httpd.service
+            systemctl enable httpd.service
+          
+          params:
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_username }
+            db_password: { get_param: db_password }
+            db_host: { get_attr: [Instancia1, networks, "red de jesus.bueno", 0] }
+
   floating_ip:
+     type: OS::Nova::FloatingIP
+     properties:
+       pool: ext-net
+
+  floating_ip2:
      type: OS::Nova::FloatingIP
      properties:
        pool: ext-net
@@ -93,3 +142,9 @@ resources:
      properties:
        floating_ip: { get_resource: floating_ip }
        server_id: { get_resource: Instancia1 }
+
+  association2:
+     type: OS::Nova::FloatingIPAssociation
+     properties:
+       floating_ip: { get_resource: floating_ip2 }
+       server_id: { get_resource: Instancia2 }
