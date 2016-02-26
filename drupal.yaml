@@ -115,7 +115,7 @@ resources:
             sed -i 's/localhost/db_host/g' /var/www/html/drupal/sites/default/default.settings.php 
             sed -i 's/myprefix_/drupal_/g' /var/www/html/drupal/sites/default/default.settings.php 
           
-            cp -p /var/www/html/drupal/sites/default/default.settings.php /var/www/html/drupal/sites/default/settings.php
+            cp /var/www/html/drupal/sites/default/default.settings.php /var/www/html/drupal/sites/default/settings.php
             
             setenforce 0
             systemctl start httpd.service
