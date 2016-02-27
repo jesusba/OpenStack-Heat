@@ -21,21 +21,110 @@ parameters:
     constraints:
       - allowed_pattern: "[A-Z]+[a-zA-Z0-9]*"
         description: El usuario debe empezar con mayuscula
+  db_name:
+    type: string
+    description: Drupal database name
+    default: drupal
+  db_username:
+    type: string
+    description: Admin account from database drupal
+    default: drupal
+    hidden: true
+  db_password:
+    type: string
+    description: The drupal database admin account password
+    default: drupal
+    hidden: true
+  db_root_password:
+    type: string
+    description: Root password for MySQL
+    default: root
+    hidden: true
 
 resources:
   Instancia1:
     type: OS::Nova::Server
     properties:
-      name: Debian
+      name: Drupal_db
       key_name: {get_param: key_name}
-      image: Debian Jessie 8.2
+      image: CentOS 7.1
       flavor: {get_param: flavor}
-      admin_user: {get_param: user_name}
       networks: [{"network":"red de jesus.bueno"}]
+      admin_user: {get_param: user_name}
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash -v
+            yum install -y mariadb mariadb-server
+            
+            systemctl start mariadb.service
+            systemctl enable mariadb.service
+            
+            mysqladmin -u root password db_rootpassword
+            
+            cat << EOF | mysql -u root --password=db_rootpassword
+            CREATE DATABASE db_name;
+            GRANT ALL PRIVILEGES ON db_name.* TO "db_user"@"%"
+            IDENTIFIED BY "db_password";
+            FLUSH PRIVILEGES;
+            EXIT
+            EOF
+          
+          params:
+            db_rootpassword: { get_param: db_root_password }
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_username }
+            db_password: { get_param: db_password }
 
   Instancia2:
     type: OS::Nova::Server
-    depends_on: Instancia1
+    properties:
+      name: Drupal_wb
+      key_name: {get_param: key_name}
+      image: CentOS 7.1
+      flavor: {get_param: flavor}
+      networks: [{"network":"red de jesus.bueno"}]
+      admin_user: {get_param: user_name}
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash -v
+            yum install -y httpd wget unzip
+            yum install -y php php-mbstring php-gd php-xml php-pear php-mysql php-pdo
+            
+            wget http://ftp.drupal.org/files/projects/drupal-7.33.zip
+            unzip -q drupal-7.33.zip -d /var/www/html/
+            
+            mv /var/www/html/drupal-7.33/ /var/www/html/drupal
+            chown -R apache:apache /var/www/html/drupal
+            cd /var/www/html/drupal/sites/default/
+            
+            chcon -R -t httpd_sys_content_rw_t /var/www/html/drupal/sites/
+            
+            sed -i 's/databasename/db_name/g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's%=> '\''username'\''%=> '\''db_username'\''%g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's%=> '\''password'\''%=> '\''db_password'\''%g' /var/www/html/drupal/sites/default/default.settings.php
+            sed -i 's/localhost/db_host/g' /var/www/html/drupal/sites/default/default.settings.php 
+            sed -i 's/myprefix_/drupal_/g' /var/www/html/drupal/sites/default/default.settings.php 
+          
+            cp /var/www/html/drupal/sites/default/default.settings.php /var/www/html/drupal/sites/default/settings.php
+            
+            chmod a+w /var/www/html/drupal/sites/default/settings.php
+            
+            setenforce 0
+            
+            systemctl start httpd.service
+            systemctl enable httpd.service
+
+          params:
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_username }
+            db_password: { get_param: db_password }
+            db_host: { get_attr: [Instancia1, networks, "red de jesus.bueno", 0] }
+
+  Instancia3:
+    type: OS::Nova::Server
+    depends_on: Instancia2
     properties:
       name: Trusty
       key_name: {get_param: key_name}
@@ -53,18 +142,7 @@ resources:
      type: OS::Cinder::VolumeAttachment
      properties:
        volume_id: { get_resource: new_volume }
-       instance_uuid: { get_resource: Instancia2 }
-
-  Instancia3:
-    type: OS::Nova::Server
-    depends_on: Instancia2
-    properties:
-      name: CentOS
-      key_name: {get_param: key_name}
-      image: CentOS 7.1
-      flavor: {get_param: flavor}
-      admin_user: {get_param: user_name}
-      networks: [{"network":"red de jesus.bueno"}]
+       instance_uuid: { get_resource: Instancia3 }
 
   floating_ip:
      type: OS::Nova::FloatingIP
